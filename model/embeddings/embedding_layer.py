@@ -2,7 +2,6 @@
 Combined embedding layer fusing token and positional embeddings.
 """
 
-import inspect
 from typing import Optional, Union, Any
 import torch
 import torch.nn as nn
@@ -12,26 +11,10 @@ from .position_embedding import SinusoidalPositionEmbedding, LearnedPositionEmbe
 
 
 def _resolve_config(explicit_config: Optional[Any] = None) -> Any:
-    """
-    Resolve configuration either from explicit argument, caller local context (e.g., test fixtures),
-    or default ModelConfig.
-    """
     if explicit_config is not None:
         return explicit_config
-
-    # Inspect call stack in case called from a test harness with `tiny_config`
-    for frame_info in inspect.stack():
-        f_locals = frame_info.frame.f_locals
-        if "tiny_config" in f_locals:
-            return f_locals["tiny_config"]
-        if "config" in f_locals and hasattr(f_locals["config"], "d_model"):
-            return f_locals["config"]
-
     from config.model_config import ModelConfig
-    try:
-        return ModelConfig()
-    except Exception:
-        return ModelConfig(d_model=768, vocab_size=50257)
+    return ModelConfig()
 
 
 class EmbeddingLayer(nn.Module):
@@ -72,6 +55,7 @@ class EmbeddingLayer(nn.Module):
                 max_seq_len=self.max_seq_len
             )
 
+        self.use_rotary = getattr(cfg, "use_rotary", False)
         self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(
@@ -94,8 +78,10 @@ class EmbeddingLayer(nn.Module):
 
         batch_size, seq_len = input_ids.shape
         tok_emb = self.token_embedding(input_ids)
+        if self.use_rotary:
+            return self.dropout(tok_emb)
         pos_emb = self.position_embedding(seq_len=seq_len, offset=offset, device=input_ids.device)
 
-        embeddings = tok_emb * pos_emb
+        embeddings = tok_emb + pos_emb.to(dtype=tok_emb.dtype)
 
         return self.dropout(embeddings)

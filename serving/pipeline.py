@@ -46,25 +46,12 @@ class ServingPipeline:
         Returns:
             Decoded completion string.
         """
-        # Step 1: Tokenization
-        if self.tokenizer is not None and hasattr(self.tokenizer, "encode"):
-            tokens = self.tokenizer.encode(text)
-        else:
-            tokens = [ord(c) for c in text]
-
-        input_ids = tokens
-
-        # Step 2: Model Forward Execution
-        if self.model is not None and callable(self.model):
-            output = self.model(input_ids)
-        else:
-            output = None
-
-        # Step 3: Decoding
-        if self.tokenizer is not None and hasattr(self.tokenizer, "decode"):
-            if isinstance(output, torch.Tensor):
-                out_tokens = output.argmax(dim=-1).squeeze(0).tolist()
-                return self.tokenizer.decode(out_tokens)
-            return self.tokenizer.decode(tokens)
-
-        return f"{text} [processed]"
+        from inference.engine.inference_engine import InferenceEngine
+        engine = InferenceEngine(
+            model_config=self.config,
+            inference_config=self.inference_config,
+            model=self.model,
+            device=self.device,
+        )
+        self.model = engine.model
+        return engine.generate(text, tokenizer=self.tokenizer, max_new_tokens=max_new_tokens)

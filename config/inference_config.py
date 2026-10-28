@@ -9,7 +9,7 @@ import json
 
 @dataclass
 class InferenceConfig:
-    max_new_tokens: int = 0
+    max_new_tokens: int = 20
     use_kv_cache: bool = True
     temperature: float = 0.8
     top_k: int = 50
@@ -22,6 +22,8 @@ class InferenceConfig:
 
     def validate(self) -> None:
         """Validate inference parameters."""
+        if self.beam_width < 1:
+            raise ValueError("beam_width must be at least 1")
         if self.max_new_tokens < 0:
             raise ValueError(f"max_new_tokens must be non-negative, got {self.max_new_tokens}")
         if self.temperature < 0.0:

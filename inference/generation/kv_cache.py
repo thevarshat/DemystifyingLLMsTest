@@ -23,8 +23,8 @@ class KVCache:
             self.k_cache[layer_idx] = key
             self.v_cache[layer_idx] = value
         else:
-            self.k_cache[layer_idx] = key
-            self.v_cache[layer_idx] = value
+            self.k_cache[layer_idx] = torch.cat([self.k_cache[layer_idx], key], dim=-2)
+            self.v_cache[layer_idx] = torch.cat([self.v_cache[layer_idx], value], dim=-2)
 
         return self.k_cache[layer_idx], self.v_cache[layer_idx]
 

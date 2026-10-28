@@ -45,8 +45,7 @@ class TokenEmbedding(nn.Module):
         Returns:
             Tensor of shape (batch_size, seq_len, d_model).
         """
-        safe_ids = input_ids % self.vocab_size
-        x = self.embedding(safe_ids)
+        x = self.embedding(input_ids)
         if self.scale_embeddings:
             x = x * math.sqrt(self.d_model)
         return x

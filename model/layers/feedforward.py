@@ -3,7 +3,6 @@ Feed-Forward Network (FFN / MLP) layer for transformer block.
 
 """
 
-import inspect
 from typing import Optional, Any
 import torch
 import torch.nn as nn
@@ -12,19 +11,8 @@ import torch.nn as nn
 def _resolve_config(explicit_config: Optional[Any] = None) -> Any:
     if explicit_config is not None:
         return explicit_config
-
-    for frame_info in inspect.stack():
-        f_locals = frame_info.frame.f_locals
-        if "tiny_config" in f_locals:
-            return f_locals["tiny_config"]
-        if "config" in f_locals and hasattr(f_locals["config"], "d_model"):
-            return f_locals["config"]
-
     from config.model_config import ModelConfig
-    try:
-        return ModelConfig()
-    except Exception:
-        return ModelConfig(d_model=768, vocab_size=50257)
+    return ModelConfig()
 
 
 class FeedForward(nn.Module):
@@ -49,7 +37,7 @@ class FeedForward(nn.Module):
         if d_ffn is not None:
             self.d_ffn = d_ffn
         else:
-            self.d_ffn = self.d_model * 2
+            self.d_ffn = self.d_model * getattr(cfg, "ffn_multiplier", 4)
 
         dropout_p = dropout if dropout is not None else getattr(cfg, "dropout", 0.1)
 

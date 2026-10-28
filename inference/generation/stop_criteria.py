@@ -12,7 +12,7 @@ class StopCriteria:
         """
         Check if generation should stop.
         """
-        if current_length > self.max_length:
+        if current_length >= self.max_length:
             return True
 
         if self.eos_token_id is not None and last_token_id is not None:

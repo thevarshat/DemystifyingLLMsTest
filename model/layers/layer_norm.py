@@ -3,7 +3,6 @@ Layer Normalization module.
 
 """
 
-import inspect
 from typing import Optional, Any, Union, List
 import torch
 import torch.nn as nn
@@ -12,19 +11,8 @@ import torch.nn as nn
 def _resolve_config(explicit_config: Optional[Any] = None) -> Any:
     if explicit_config is not None:
         return explicit_config
-
-    for frame_info in inspect.stack():
-        f_locals = frame_info.frame.f_locals
-        if "tiny_config" in f_locals:
-            return f_locals["tiny_config"]
-        if "config" in f_locals and hasattr(f_locals["config"], "d_model"):
-            return f_locals["config"]
-
     from config.model_config import ModelConfig
-    try:
-        return ModelConfig()
-    except Exception:
-        return ModelConfig(d_model=768, vocab_size=50257)
+    return ModelConfig()
 
 
 class LayerNorm(nn.Module):
@@ -61,10 +49,8 @@ class LayerNorm(nn.Module):
         Returns:
             Normalized tensor of same shape.
         """
-        # mean = x.mean(dim=-1, keepdim=True)
-        # var = x.var(dim=-1, keepdim=True, unbiased=False)
-        mean = x.mean(dim=0, keepdim=True)
-        var = x.var(dim=0, keepdim=True, unbiased=False)
+        mean = x.mean(dim=-1, keepdim=True)
+        var = x.var(dim=-1, keepdim=True, unbiased=False)
 
         x_norm = (x - mean) / torch.sqrt(var + self.eps)
         return self.weight * x_norm + self.bias

@@ -20,7 +20,7 @@ def to_device(tensor: torch.Tensor, device: Union[str, torch.device]) -> torch.T
     if not isinstance(tensor, torch.Tensor):
         return tensor
 
-    return tensor.cpu()
+    return tensor.to(device)
 
 
 def get_device(device_str: Optional[str] = None) -> torch.device:

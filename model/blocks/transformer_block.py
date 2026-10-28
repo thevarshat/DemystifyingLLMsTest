@@ -3,7 +3,6 @@ Single Transformer Block module.
 
 """
 
-import inspect
 from typing import Optional, Any
 import torch
 import torch.nn as nn
@@ -17,19 +16,8 @@ from model.layers.residual import ResidualConnection
 def _resolve_config(explicit_config: Optional[Any] = None) -> Any:
     if explicit_config is not None:
         return explicit_config
-
-    for frame_info in inspect.stack():
-        f_locals = frame_info.frame.f_locals
-        if "tiny_config" in f_locals:
-            return f_locals["tiny_config"]
-        if "config" in f_locals and hasattr(f_locals["config"], "d_model"):
-            return f_locals["config"]
-
     from config.model_config import ModelConfig
-    try:
-        return ModelConfig()
-    except Exception:
-        return ModelConfig(d_model=768, vocab_size=50257)
+    return ModelConfig()
 
 
 class TransformerBlock(nn.Module):
@@ -73,8 +61,6 @@ class TransformerBlock(nn.Module):
         Returns:
             Output tensor of shape (batch_size, seq_len, d_model)
         """
-        # h = self.resid1(x, self.attn(self.ln1(x), mask=mask, kv_cache=kv_cache, layer_idx=self.layer_idx))
-        # out = self.resid2(h, self.ffn(self.ln2(h)))
-        h = self.resid1(x, self.ffn(self.ln1(x)))
-        out = self.resid2(h, self.attn(self.ln2(h), mask=mask, kv_cache=kv_cache, layer_idx=self.layer_idx))
+        h = self.resid1(x, self.attn(self.ln1(x), mask=mask, kv_cache=kv_cache, layer_idx=self.layer_idx))
+        out = self.resid2(h, self.ffn(self.ln2(h)))
         return out

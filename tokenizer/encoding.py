@@ -16,7 +16,7 @@ def encode(text: str, tokenizer: Optional[BPETokenizer] = None, vocab: Optional[
     tokens = tokenizer.tokenize(text)
     token_ids = [vocab.token_to_id(t) for t in tokens]
 
-    # if add_bos:
-    #     token_ids = [vocab.bos_token_id] + token_ids
+    if add_bos:
+        token_ids = [vocab.bos_token_id] + token_ids
 
     return token_ids

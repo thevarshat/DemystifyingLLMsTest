@@ -19,12 +19,10 @@ class BPETokenizer:
     def _merge_word(self, pieces: List[str], pair: Tuple[str, str]) -> List[str]:
         new_pieces = []
         i = 0
-        merged = False
         while i < len(pieces):
-            if not merged and i < len(pieces) - 1 and pieces[i] == pair[0] and pieces[i + 1] == pair[1]:
+            if i < len(pieces) - 1 and pieces[i] == pair[0] and pieces[i + 1] == pair[1]:
                 new_pieces.append(pair[0] + pair[1])
                 i += 2
-                merged = True
             else:
                 new_pieces.append(pieces[i])
                 i += 1
@@ -37,11 +35,12 @@ class BPETokenizer:
         if len(pieces) <= 1:
             return pieces
 
-        ordered_merges = sorted(self.merges)
-
-        for pair in ordered_merges:
-            if len(pieces) <= 1:
+        ranks = {pair: rank for rank, pair in reversed(list(enumerate(self.merges)))}
+        while len(pieces) > 1:
+            candidates = [pair for pair in self._get_stats(pieces) if pair in ranks]
+            if not candidates:
                 break
+            pair = min(candidates, key=ranks.__getitem__)
             pieces = self._merge_word(pieces, pair)
 
         return pieces

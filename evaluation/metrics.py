@@ -44,8 +44,8 @@ def cross_entropy_loss(
         Scalar loss tensor.
     """
     vocab_size = logits.size(-1)
-    flat_logits = logits.view(-1, vocab_size)
-    flat_targets = targets.view(-1)
+    flat_logits = logits.reshape(-1, vocab_size)
+    flat_targets = targets.reshape(-1)
     return F.cross_entropy(flat_logits, flat_targets, ignore_index=ignore_index)
 
 
