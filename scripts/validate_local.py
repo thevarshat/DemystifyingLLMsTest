@@ -42,6 +42,14 @@ def main():
     x = torch.randn(2, 5, 32)
     torch.testing.assert_close(LayerNorm(32)(x), F.layer_norm(x, (32,)))
     torch.testing.assert_close(ResidualConnection(0)(x, x * 3), x * 4)
+    torch.testing.assert_close(LayerNorm([5, 32])(x), F.layer_norm(x, (5, 32)))
+    blocked = torch.full_like(mask, float("-inf"))
+    zero_output, zero_weights = scaled_dot_product_attention(q, k, v, blocked)
+    torch.testing.assert_close(zero_output, torch.zeros_like(zero_output))
+    torch.testing.assert_close(zero_weights, torch.zeros_like(zero_weights))
+    q_grad = q.clone().requires_grad_()
+    scaled_dot_product_attention(q_grad, k, v, blocked)[0].sum().backward()
+    assert torch.isfinite(q_grad.grad).all()
 
     logits = torch.tensor([[1.0, -2.0, 3.0, 0.0]])
     torch.testing.assert_close(apply_temperature(logits, 2), logits / 2)
@@ -76,6 +84,8 @@ def main():
         inf_cfg = InferenceConfig(max_new_tokens=4, temperature=0, repetition_penalty=1)
         engine = InferenceEngine(cfg, inf_cfg, model=model)
         assert engine.generate_tokens(ids[0].tolist()) == cached[0].tolist()
+        full_prompt = [2] * cfg.max_seq_len
+        assert len(engine.generate_tokens(full_prompt, max_new_tokens=1)) == cfg.max_seq_len + 1
         with TemporaryDirectory() as temp:
             path = str(Path(temp) / 'weights.pt')
             save_checkpoint(model.state_dict(), path, use_pickle=False)

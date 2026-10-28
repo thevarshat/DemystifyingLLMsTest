@@ -41,7 +41,10 @@ def scaled_dot_product_attention(
     if mask is not None:
         scores = scores + mask
 
-    attn_weights = F.softmax(scores, dim=-1)
+    # A query with no visible keys contributes zero, including for left padding.
+    fully_masked = torch.isneginf(scores).all(dim=-1, keepdim=True)
+    safe_scores = scores.masked_fill(fully_masked, 0.0)
+    attn_weights = F.softmax(safe_scores, dim=-1).masked_fill(fully_masked, 0.0)
 
     if dropout is not None:
         attn_weights = dropout(attn_weights)

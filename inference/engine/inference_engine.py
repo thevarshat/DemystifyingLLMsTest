@@ -110,7 +110,7 @@ class InferenceEngine:
             torch.manual_seed(cfg.seed)
         with torch.no_grad():
             for step in range(cfg.max_new_tokens):
-                if len(tokens) >= self.model_config.max_seq_len:
+                if len(tokens) > self.model_config.max_seq_len:
                     break
                 model_tokens = tokens if cache is None or step == 0 else tokens[-1:]
                 input_tensor = torch.tensor([model_tokens], dtype=torch.long, device=self.device)
