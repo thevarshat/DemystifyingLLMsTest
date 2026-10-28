@@ -6,6 +6,7 @@ Status: Clean
 
 import logging
 import sys
+import copy
 from typing import Optional
 
 
@@ -22,6 +23,7 @@ class ColoredFormatter(logging.Formatter):
     RESET = "\033[0m"
 
     def format(self, record: logging.LogRecord) -> str:
+        record = copy.copy(record)
         color = self.COLORS.get(record.levelno, self.RESET)
         record.levelname = f"{color}{record.levelname:<8}{self.RESET}"
         return super().format(record)

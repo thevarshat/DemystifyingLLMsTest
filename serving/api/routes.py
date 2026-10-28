@@ -40,8 +40,11 @@ class RouteHandler:
             return 200, self.handler.handle_models()
 
         if method == "POST" and clean_path in ("/v1/completions", "/completions"):
-            request_body = body or {}
-            response = self.handler.handle_completion(request_body)
+            request_body = {} if body is None else body
+            try:
+                response = self.handler.handle_completion(request_body)
+            except (ValueError, TypeError) as exc:
+                return 400, {"error": str(exc)}
             return 200, response
 
         return 404, {"error": f"Endpoint not found: {method} {path}"}

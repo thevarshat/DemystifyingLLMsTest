@@ -5,6 +5,7 @@ Inference and text generation configuration.
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 import json
+import math
 
 
 @dataclass
@@ -20,8 +21,17 @@ class InferenceConfig:
     beam_width: int = 1         # 1 indicates greedy / stochastic sampling (non-beam)
     seed: Optional[int] = 42
 
+    def __post_init__(self) -> None:
+        self.validate()
+
     def validate(self) -> None:
         """Validate inference parameters."""
+        for name in ("max_new_tokens", "top_k", "beam_width"):
+            if type(getattr(self, name)) is not int:
+                raise ValueError(f"{name} must be an integer")
+        for name in ("temperature", "top_p", "repetition_penalty"):
+            if not math.isfinite(getattr(self, name)):
+                raise ValueError(f"{name} must be finite")
         if self.beam_width < 1:
             raise ValueError("beam_width must be at least 1")
         if self.max_new_tokens < 0:

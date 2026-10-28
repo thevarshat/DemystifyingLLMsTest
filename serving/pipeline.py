@@ -28,10 +28,7 @@ class ServingPipeline:
     ):
         self.model = model
         self.tokenizer = tokenizer
-        try:
-            self.config = config or ModelConfig()
-        except Exception:
-            self.config = ModelConfig(d_model=768, vocab_size=50257)
+        self.config = config or getattr(model, "config", None) or ModelConfig()
         self.inference_config = inference_config or InferenceConfig()
         self.device = torch.device(device) if device else torch.device("cpu")
 

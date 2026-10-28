@@ -100,6 +100,20 @@ class InferenceEngine:
                 raise ValueError("An empty prompt requires a valid BOS token")
             tokens = [BOS_TOKEN_ID]
         sampler = Sampler(cfg.temperature, cfg.top_k, cfg.top_p, cfg.repetition_penalty)
+        if len(tokens) > self.model_config.max_seq_len:
+            raise ValueError("Prompt exceeds the model context window")
+        if cfg.beam_width > 1:
+            from inference.generation.beam_search import BeamSearch
+            from inference.sampling.repetition_penalty import apply_repetition_penalty
+            search = BeamSearch(
+                beam_width=cfg.beam_width,
+                max_length=min(cfg.max_new_tokens, self.model_config.max_seq_len - len(tokens) + 1),
+                stop_token_ids=(set(cfg.stop_token_ids) | {EOS_TOKEN_ID}) if cfg.early_stopping else (),
+                logits_processor=lambda logits, history: apply_repetition_penalty(
+                    logits, history, cfg.repetition_penalty),
+            )
+            inputs = torch.tensor([tokens], dtype=torch.long, device=self.device)
+            return search.search(self.model, inputs)[0].tolist()
         parameters = inspect.signature(self.model.forward if hasattr(self.model, "forward") else self.model).parameters
         supports_cache = "kv_cache" in parameters or any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()

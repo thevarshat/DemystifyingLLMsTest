@@ -27,6 +27,14 @@ from serving.model_loader import ModelLoader
 from tokenizer import BPETokenizer
 from utils.checkpoint import save_checkpoint
 from tempfile import TemporaryDirectory
+from tokenizer.vocab import Vocabulary
+from model.embeddings.token_embedding import TokenEmbedding
+from inference.generation.beam_search import BeamSearch
+from serving.api.routes import RouteHandler
+from evaluation.benchmarks import benchmark_generation_throughput
+from utils.logging_utils import ColoredFormatter
+import logging
+import itertools
 
 
 def main():
@@ -59,6 +67,54 @@ def main():
     penalized = apply_repetition_penalty(logits, [0, 1, 0], 2)
     torch.testing.assert_close(penalized, torch.tensor([[0.5, -4.0, 3.0, 0.0]]))
     assert StopCriteria(5).should_stop(5)
+
+    for options in ({"temperature": float("nan")}, {"repetition_penalty": float("inf")},
+                    {"max_new_tokens": 1.5}, {"beam_width": 0}):
+        try:
+            InferenceConfig(**options)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"Invalid configuration accepted: {options}")
+    first = Vocabulary({"alpha": 0})
+    second = Vocabulary({"beta": 0})
+    assert "alpha" not in second and "beta" not in first
+    assert first.id_to_token(first.token_to_id("alpha")) == "alpha"
+    assert second.id_to_token(second.token_to_id("beta")) == "beta"
+    ranked = BPETokenizer(Vocabulary({"abc": 10}), [("b", "c"), ("a", "b")])
+    assert ranked.bpe("abc") == ["a", "bc"]
+    embedding = TokenEmbedding(8, 4, padding_idx=0)
+    assert torch.count_nonzero(embedding(torch.tensor([0]))) == 0
+    record = logging.LogRecord("check", logging.INFO, __file__, 1, "message", (), None)
+    ColoredFormatter().format(record)
+    assert record.levelname == "INFO"
+
+    # Exhaustive two-step search is an independent oracle for a tiny real model.
+    beam_cfg = ModelConfig(d_model=8, n_heads=2, n_layers=1, vocab_size=3,
+                           max_seq_len=8, dropout=0, tie_weights=False)
+    beam_model = FullTransformerModel(beam_cfg).eval()
+    prompt_ids = torch.tensor([[0]])
+    candidates = []
+    with torch.no_grad():
+        for suffix in itertools.product(range(3), repeat=2):
+            seq = prompt_ids.clone()
+            score = 0.0
+            for token in suffix:
+                score += beam_model(seq)[0, -1].log_softmax(-1)[token].item()
+                seq = torch.cat([seq, torch.tensor([[token]])], dim=1)
+            candidates.append((score, seq))
+    expected_beam = max(candidates, key=lambda item: item[0])[1]
+    actual_beam = BeamSearch(beam_width=9, max_length=2).search(beam_model, prompt_ids)
+    torch.testing.assert_close(actual_beam, expected_beam)
+    beam_engine = InferenceEngine(beam_cfg, InferenceConfig(
+        beam_width=9, max_new_tokens=2, repetition_penalty=1), beam_model)
+    assert beam_engine.generate_tokens([0]) == expected_beam[0].tolist()
+    # BOS and EOS can be the same token; the prompt must still be expanded.
+    assert BeamSearch(2, 1, eos_token_id=0).search(beam_model, prompt_ids).size(1) == 2
+    throughput = benchmark_generation_throughput(
+        lambda ids, count: autoregressive_generate(beam_model, ids, count),
+        torch.tensor([[0], [1]]), max_new_tokens=2)
+    assert throughput["tokens_generated"] == 4
 
     for rotary in (False, True):
         cfg = ModelConfig(d_model=32, n_heads=4, n_layers=2, vocab_size=64,
@@ -104,10 +160,16 @@ def main():
     result = engine.generate(prompt, tokenizer=tok)
     assert isinstance(result, str) and result.startswith(prompt)
     assert ServingPipeline(model, tok, cfg, inf_cfg).process(prompt) == result
+    inferred_pipeline = ServingPipeline(model=model, tokenizer=tok, inference_config=inf_cfg)
+    assert inferred_pipeline.config is cfg
+    assert inferred_pipeline.process(prompt) == result
     response = RequestHandler(engine, tok).handle_completion(
         {'prompt': prompt, 'max_tokens': 2, 'temperature': 0})
     assert isinstance(response['choices'][0]['text'], str)
     assert response['usage']['completion_tokens'] == 2
+    router = RouteHandler(RequestHandler(engine, tok))
+    for invalid_body in ([1], {"prompt": 12}, {"max_tokens": -1}, {"temperature": float("nan")}):
+        assert router.dispatch("POST", "/v1/completions", invalid_body)[0] == 400
     print('All local mathematical and integration checks passed.')
 
 

@@ -29,9 +29,15 @@ class RequestHandler:
         Returns:
             Formatted response dictionary.
         """
+        if not isinstance(request_body, dict):
+            raise ValueError("Request body must be a JSON object")
         prompt = request_body.get("prompt", "")
         max_tokens = request_body.get("max_tokens", 16)
         temperature = request_body.get("temperature", 0.8)
+        if not isinstance(prompt, str):
+            raise ValueError("prompt must be a string")
+        from config.inference_config import InferenceConfig
+        InferenceConfig(max_new_tokens=max_tokens, temperature=temperature)
 
         # Tokenize prompt
         if self.tokenizer is not None and hasattr(self.tokenizer, "encode"):
@@ -47,7 +53,8 @@ class RequestHandler:
                 temperature=temperature
             )
         elif self.engine is not None and hasattr(self.engine, "generate"):
-            raw_gen = self.engine.generate(prompt, tokenizer=self.tokenizer, max_new_tokens=max_tokens)
+            raw_gen = self.engine.generate(prompt, tokenizer=self.tokenizer, max_new_tokens=max_tokens,
+                                           temperature=temperature)
             if self.tokenizer is not None:
                 generated_tokens = self.tokenizer.encode(raw_gen)
             else:
@@ -56,6 +63,10 @@ class RequestHandler:
             raise RuntimeError("No inference engine is configured")
 
         completion_tokens = generated_tokens[len(prompt_tokens):]
+        from config.constants import EOS_TOKEN_ID
+        stop_ids = set(getattr(getattr(self.engine, "inference_config", None), "stop_token_ids", []))
+        stop_ids.add(EOS_TOKEN_ID)
+        stopped = bool(completion_tokens and completion_tokens[-1] in stop_ids)
         if self.tokenizer is not None:
             response_text = self.tokenizer.decode(completion_tokens)
         else:
@@ -71,7 +82,7 @@ class RequestHandler:
                 {
                     "text": response_text,
                     "index": 0,
-                    "finish_reason": "length"
+                    "finish_reason": "stop" if stopped else "length"
                 }
             ],
             "usage": {
